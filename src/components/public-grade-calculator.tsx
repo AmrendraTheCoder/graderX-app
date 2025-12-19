@@ -6,7 +6,6 @@ import {
   Plus,
   Trash2,
   BookOpen,
-  Users,
   RotateCcw,
   Trophy,
   Target,
@@ -27,7 +26,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Link from "next/link";
 
 interface Subject {
   id: string;
@@ -75,8 +73,6 @@ export function PublicGradeCalculator({
 }: PublicGradeCalculatorProps) {
   const [selectedBranch, setSelectedBranch] = useState<string>("CSE");
   const [selectedSemester, setSelectedSemester] = useState<string>("1");
-  const [selectedAcademicYear, setSelectedAcademicYear] =
-    useState<string>("2024-25");
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [results, setResults] = useState({
     sgpa: 0,
@@ -90,12 +86,6 @@ export function PublicGradeCalculator({
   // Track newly added grade for auto-scroll
   const [newlyAddedGradeId, setNewlyAddedGradeId] = useState<number | null>(
     null
-  );
-
-  // Academic year options
-  const academicYears = useMemo(
-    () => ["2024-25", "2023-24", "2022-23", "2021-22", "2020-21"],
-    []
   );
 
   // Memoize semesterSubjects to prevent infinite loops and filter by branch
@@ -369,7 +359,7 @@ export function PublicGradeCalculator({
 
         <CardContent className="p-4 sm:p-6">
           {/* Selection Controls - Mobile Optimized */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
                 Branch
@@ -387,27 +377,6 @@ export function PublicGradeCalculator({
                           {branch.label}
                         </div>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Academic Year
-              </label>
-              <Select
-                value={selectedAcademicYear}
-                onValueChange={setSelectedAcademicYear}
-              >
-                <SelectTrigger className="h-12">
-                  <SelectValue placeholder="Select Year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {academicYears.map((year) => (
-                    <SelectItem key={year} value={year}>
-                      {year}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -486,41 +455,13 @@ export function PublicGradeCalculator({
                       The subjects database needs to be initialized with LNMIIT
                       curriculum data.
                     </p>
-                    <div className="space-y-3">
-                      <p className="text-sm text-gray-500">
-                        To initialize subjects:
-                      </p>
-                      <ol className="text-sm text-gray-600 text-left max-w-sm mx-auto space-y-1">
-                        <li>
-                          1.{" "}
-                          <Link
-                            href="/sign-up"
-                            className="text-blue-600 hover:underline"
-                          >
-                            Create an account
-                          </Link>
-                        </li>
-                        <li>
-                          2.{" "}
-                          <Link
-                            href="/admin-access"
-                            className="text-blue-600 hover:underline"
-                          >
-                            Get admin access
-                          </Link>{" "}
-                          with passcode
-                        </li>
-                        <li>3. Initialize default LNMIIT subjects</li>
-                      </ol>
-                      <div className="pt-2">
-                        <Link href="/admin-access">
-                          <Button variant="outline" size="sm">
-                            <Users className="w-4 h-4 mr-2" />
-                            Get Admin Access
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
+                    <p className="text-sm text-gray-500 mb-4">
+                      You can add subjects manually using the button below.
+                    </p>
+                    <Button onClick={addGradeRow} variant="outline" size="sm">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Custom Subject
+                    </Button>
                   </CardContent>
                 </Card>
               ) : semesterSubjects.length === 0 ? (
@@ -734,8 +675,7 @@ export function PublicGradeCalculator({
                 Your Results
               </h3>
               <p className="text-gray-600 text-sm">
-                Calculated for {selectedBranch} • Semester {selectedSemester} •{" "}
-                {selectedAcademicYear}
+                Calculated for {selectedBranch} • Semester {selectedSemester}
               </p>
             </div>
 

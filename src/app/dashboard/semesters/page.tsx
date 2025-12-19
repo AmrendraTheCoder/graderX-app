@@ -34,24 +34,27 @@ export default async function SemestersPage() {
     .sort({ semester: 1 })
     .lean();
 
-  // Populate subject details for each grade
-  const populatedGrades = await Promise.all(
-    gradesData.map(async (grade: any) => {
-      const subject = await Subject.findById(grade.subjectId).lean();
-      return {
-        id: grade._id.toString(),
-        grade: grade.grade,
-        grade_points: grade.gradePoints,
-        semester: grade.semester,
-        academic_year: grade.academicYear,
-        subjects: subject ? {
-          name: subject.name,
-          code: subject.code,
-          credits: subject.credits,
-        } : null,
-      };
-    })
-  );
+  // Get all unique subject IDs and fetch in ONE query
+  const subjectIds = Array.from(new Set(gradesData.map((g: any) => g.subjectId?.toString()).filter(Boolean)));
+  const subjectsData = await Subject.find({ _id: { $in: subjectIds } }).lean();
+  const subjectsMap = new Map(subjectsData.map((s: any) => [s._id.toString(), s]));
+
+  // Map grades with subjects using pre-fetched data (no async needed)
+  const populatedGrades = gradesData.map((grade: any) => {
+    const subject = subjectsMap.get(grade.subjectId?.toString());
+    return {
+      id: grade._id.toString(),
+      grade: grade.grade,
+      grade_points: grade.gradePoints,
+      semester: grade.semester,
+      academic_year: grade.academicYear,
+      subjects: subject ? {
+        name: subject.name,
+        code: subject.code,
+        credits: subject.credits,
+      } : null,
+    };
+  });
 
   // Group grades by semester
   const semesterGroups =

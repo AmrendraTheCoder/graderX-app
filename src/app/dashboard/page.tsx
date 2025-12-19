@@ -47,12 +47,14 @@ export default async function Dashboard() {
 
   const userRole = userData.role || "student";
 
-  // If admin, show admin dashboard
+  // If admin, show admin dashboard - run queries in parallel
   if (userRole === "admin") {
-    const totalUsers = await User.countDocuments();
-    const totalSubjects = await Subject.countDocuments();
-    const totalGrades = await UserGrade.countDocuments();
-    const cgpaData = await CGPACalculation.find({ semester: 0 });
+    const [totalUsers, totalSubjects, totalGrades, cgpaData] = await Promise.all([
+      User.countDocuments(),
+      Subject.countDocuments(),
+      UserGrade.countDocuments(),
+      CGPACalculation.find({ semester: 0 }),
+    ]);
     const avgCGPA =
       cgpaData && cgpaData.length > 0
         ? (cgpaData.reduce((sum, item) => sum + item.cgpa, 0) / cgpaData.length).toFixed(2)

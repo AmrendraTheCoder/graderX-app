@@ -51,21 +51,24 @@ export default async function GradesPage({
     .sort({ createdAt: -1 })
     .lean();
 
-  // Populate subject details for each grade
-  const populatedGrades = await Promise.all(
-    userGrades.map(async (grade: any) => {
-      const subject = await Subject.findById(grade.subjectId).lean();
-      return {
-        ...grade,
-        _id: grade._id.toString(),
-        subjects: subject ? {
-          name: subject.name,
-          code: subject.code,
-          credits: subject.credits,
-        } : null,
-      };
-    })
-  );
+  // Get all unique subject IDs and fetch in ONE query
+  const subjectIds = Array.from(new Set(userGrades.map((g: any) => g.subjectId?.toString()).filter(Boolean)));
+  const subjectsData = await Subject.find({ _id: { $in: subjectIds } }).lean();
+  const subjectsMap = new Map(subjectsData.map((s: any) => [s._id.toString(), s]));
+
+  // Map grades with subjects using pre-fetched data (no async needed)
+  const populatedGrades = userGrades.map((grade: any) => {
+    const subject = subjectsMap.get(grade.subjectId?.toString());
+    return {
+      ...grade,
+      _id: grade._id.toString(),
+      subjects: subject ? {
+        name: subject.name,
+        code: subject.code,
+        credits: subject.credits,
+      } : null,
+    };
+  });
 
   return (
     <>
