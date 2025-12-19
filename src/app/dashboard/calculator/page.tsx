@@ -26,24 +26,29 @@ export default async function CGPACalculator() {
   // Get user's existing grades with subject details
   const userGrades = await UserGrade.find({ userId: session.user.id }).lean();
 
-  // Populate subject details for each grade
-  const gradesWithSubjects = await Promise.all(
-    userGrades.map(async (grade: any) => {
-      const subject = await Subject.findById(grade.subjectId).lean();
-      return {
-        id: grade._id.toString(),
-        grade: grade.grade,
-        grade_points: grade.gradePoints,
-        semester: grade.semester,
-        academic_year: grade.academicYear,
-        subjects: subject ? {
-          name: subject.name,
-          code: subject.code,
-          credits: subject.credits,
-        } : null,
-      };
-    })
-  );
+  // Get all unique subject IDs from grades
+  const subjectIds = Array.from(new Set(userGrades.map((g: any) => g.subjectId?.toString()).filter(Boolean)));
+  
+  // Fetch all subjects in ONE query (instead of N queries)
+  const subjectsData = await Subject.find({ _id: { $in: subjectIds } }).lean();
+  const subjectsMap = new Map(subjectsData.map((s: any) => [s._id.toString(), s]));
+
+  // Map grades with subjects using the pre-fetched data
+  const gradesWithSubjects = userGrades.map((grade: any) => {
+    const subject = subjectsMap.get(grade.subjectId?.toString());
+    return {
+      id: grade._id.toString(),
+      grade: grade.grade,
+      grade_points: grade.gradePoints,
+      semester: grade.semester,
+      academic_year: grade.academicYear,
+      subjects: subject ? {
+        name: subject.name,
+        code: subject.code,
+        credits: subject.credits,
+      } : null,
+    };
+  });
 
   // Filter out grades without valid subjects to match ExistingGrade type
   const existingGrades = gradesWithSubjects.filter(
