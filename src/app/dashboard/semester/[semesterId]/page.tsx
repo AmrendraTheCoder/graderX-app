@@ -1,7 +1,10 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import { BookOpen, ArrowLeft, TrendingUp } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../../supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import connectToDatabase from "@/lib/mongodb";
+import { UserGrade, CGPACalculation, Subject } from "@/models";
 import {
   Card,
   CardContent,
@@ -27,42 +30,48 @@ interface Props {
 }
 
 export default async function SemesterDetailPage({ params }: Props) {
-  const supabase = await createClient();
+  const session = await getServerSession(authOptions);
   const { semesterId: semesterIdParam } = await params;
   const semesterId = parseInt(semesterIdParam);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user) {
     return redirect("/sign-in");
   }
 
+  await connectToDatabase();
+
   // Get grades for this semester
-  const { data: gradesData } = await supabase
-    .from("user_grades")
-    .select(
-      `
-      *,
-      subjects:subject_id (
-        name,
-        code,
-        credits
-      )
-    `
-    )
-    .eq("user_id", user.id)
-    .eq("semester", semesterId)
-    .order("created_at", { ascending: true });
+  const gradesRaw = await UserGrade.find({ 
+    userId: session.user.id, 
+    semester: semesterId 
+  })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  // Populate subject details
+  const gradesData = await Promise.all(
+    gradesRaw.map(async (grade: any) => {
+      const subject = await Subject.findById(grade.subjectId).lean();
+      return {
+        id: grade._id.toString(),
+        grade: grade.grade,
+        grade_points: grade.gradePoints,
+        semester: grade.semester,
+        academic_year: grade.academicYear,
+        subjects: subject ? {
+          name: subject.name,
+          code: subject.code,
+          credits: subject.credits,
+        } : null,
+      };
+    })
+  );
 
   // Get CGPA data for this semester
-  const { data: cgpaData } = await supabase
-    .from("cgpa_calculations")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("semester", semesterId)
-    .single();
+  const cgpaData = await CGPACalculation.findOne({
+    userId: session.user.id,
+    semester: semesterId,
+  }).lean();
 
   if (!gradesData || gradesData.length === 0) {
     return (
@@ -240,17 +249,17 @@ export default async function SemesterDetailPage({ params }: Props) {
                           <TableCell className="text-center">
                             <span
                               className={`font-bold ${
-                                grade.grade === "A+"
+                                grade.grade === "A+" || grade.grade === "A"
                                   ? "text-green-600"
-                                  : grade.grade === "A"
+                                  : grade.grade === "AB"
                                     ? "text-green-500"
-                                    : grade.grade === "B+"
+                                    : grade.grade === "B+" || grade.grade === "B"
                                       ? "text-blue-600"
-                                      : grade.grade === "B"
+                                      : grade.grade === "BC"
                                         ? "text-blue-500"
-                                        : grade.grade === "C+"
+                                        : grade.grade === "C+" || grade.grade === "C"
                                           ? "text-yellow-600"
-                                          : grade.grade === "C"
+                                          : grade.grade === "CD"
                                             ? "text-yellow-500"
                                             : grade.grade === "D"
                                               ? "text-orange-500"
@@ -261,7 +270,7 @@ export default async function SemesterDetailPage({ params }: Props) {
                             </span>
                           </TableCell>
                           <TableCell className="text-center">
-                            {grade.grade_points.toFixed(1)}
+                            {grade.grade_points?.toFixed(1) || "0.0"}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -287,10 +296,13 @@ export default async function SemesterDetailPage({ params }: Props) {
                         const gradeOrder = [
                           "A+",
                           "A",
+                          "AB",
                           "B+",
                           "B",
+                          "BC",
                           "C+",
                           "C",
+                          "CD",
                           "D",
                           "F",
                         ];
@@ -304,17 +316,17 @@ export default async function SemesterDetailPage({ params }: Props) {
                           <div className="flex items-center gap-2">
                             <span
                               className={`font-bold ${
-                                grade === "A+"
+                                grade === "A+" || grade === "A"
                                   ? "text-green-600"
-                                  : grade === "A"
+                                  : grade === "AB"
                                     ? "text-green-500"
-                                    : grade === "B+"
+                                    : grade === "B+" || grade === "B"
                                       ? "text-blue-600"
-                                      : grade === "B"
+                                      : grade === "BC"
                                         ? "text-blue-500"
-                                        : grade === "C+"
+                                        : grade === "C+" || grade === "C"
                                           ? "text-yellow-600"
-                                          : grade === "C"
+                                          : grade === "CD"
                                             ? "text-yellow-500"
                                             : grade === "D"
                                               ? "text-orange-500"
@@ -328,17 +340,17 @@ export default async function SemesterDetailPage({ params }: Props) {
                             <div className="w-16 bg-gray-200 rounded-full h-2">
                               <div
                                 className={`h-2 rounded-full ${
-                                  grade === "A+"
+                                  grade === "A+" || grade === "A"
                                     ? "bg-green-600"
-                                    : grade === "A"
+                                    : grade === "AB"
                                       ? "bg-green-500"
-                                      : grade === "B+"
+                                      : grade === "B+" || grade === "B"
                                         ? "bg-blue-600"
-                                        : grade === "B"
+                                        : grade === "BC"
                                           ? "bg-blue-500"
-                                          : grade === "C+"
+                                          : grade === "C+" || grade === "C"
                                             ? "bg-yellow-600"
-                                            : grade === "C"
+                                            : grade === "CD"
                                               ? "bg-yellow-500"
                                               : grade === "D"
                                                 ? "bg-orange-500"

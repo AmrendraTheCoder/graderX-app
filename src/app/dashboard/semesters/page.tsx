@@ -1,7 +1,10 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import { BookOpen, TrendingUp, Calendar } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import connectToDatabase from "@/lib/mongodb";
+import { UserGrade, CGPACalculation, Subject } from "@/models";
 import {
   Card,
   CardContent,
@@ -13,42 +16,46 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 export default async function SemestersPage() {
-  const supabase = await createClient();
+  const session = await getServerSession(authOptions);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user) {
     return redirect("/sign-in");
   }
 
-  // Get semester-wise CGPA data
-  const { data: cgpaData } = await supabase
-    .from("cgpa_calculations")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("semester", { ascending: true });
+  await connectToDatabase();
 
-  // Get grades grouped by semester
-  const { data: gradesData } = await supabase
-    .from("user_grades")
-    .select(
-      `
-      *,
-      subjects:subject_id (
-        name,
-        code,
-        credits
-      )
-    `,
-    )
-    .eq("user_id", user.id)
-    .order("semester", { ascending: true });
+  // Get semester-wise CGPA data
+  const cgpaData = await CGPACalculation.find({ userId: session.user.id })
+    .sort({ semester: 1 })
+    .lean();
+
+  // Get grades
+  const gradesData = await UserGrade.find({ userId: session.user.id })
+    .sort({ semester: 1 })
+    .lean();
+
+  // Populate subject details for each grade
+  const populatedGrades = await Promise.all(
+    gradesData.map(async (grade: any) => {
+      const subject = await Subject.findById(grade.subjectId).lean();
+      return {
+        id: grade._id.toString(),
+        grade: grade.grade,
+        grade_points: grade.gradePoints,
+        semester: grade.semester,
+        academic_year: grade.academicYear,
+        subjects: subject ? {
+          name: subject.name,
+          code: subject.code,
+          credits: subject.credits,
+        } : null,
+      };
+    })
+  );
 
   // Group grades by semester
   const semesterGroups =
-    gradesData?.reduce((acc: any, grade: any) => {
+    populatedGrades?.reduce((acc: any, grade: any) => {
       const semester = grade.semester;
       if (!acc[semester]) {
         acc[semester] = [];
@@ -133,7 +140,7 @@ export default async function SemestersPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {gradesData?.length || 0}
+                      {populatedGrades?.length || 0}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Subjects completed
@@ -147,7 +154,7 @@ export default async function SemestersPage() {
                 {semesters.map((semester) => {
                   const semesterGrades = semesterGroups[semester];
                   const semesterCGPA = cgpaData?.find(
-                    (c) => c.semester === semester,
+                    (c: any) => c.semester === semester,
                   );
 
                   // Calculate SGPA for this semester

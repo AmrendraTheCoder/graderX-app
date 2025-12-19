@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "../../../supabase/client";
+import { useSession } from "next-auth/react";
 import {
   Card,
   CardContent,
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { makeUserAdmin } from "@/app/actions";
 
 const ADMIN_PASSCODE = "LNMIIT_ADMIN_2024";
 
@@ -24,6 +25,7 @@ export default function AdminAccessPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const router = useRouter();
+  const { data: session } = useSession();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,38 +38,23 @@ export default function AdminAccessPage() {
       return;
     }
 
+    if (!session?.user) {
+      setMessage("You must be signed in to access admin features.");
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const supabase = createClient();
-
-      // Get current user
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        setMessage("You must be signed in to access admin features.");
-        setIsLoading(false);
-        return;
-      }
-
-      // Update user role to admin
-      const { error: updateError } = await supabase
-        .from("users")
-        .update({ role: "admin" })
-        .eq("id", user.id);
-
-      if (updateError) {
-        console.error("Error updating user role:", updateError);
-        setMessage("Failed to grant admin access. Please try again.");
-      } else {
-        setMessage("Admin access granted! Redirecting...");
-        setTimeout(() => {
-          router.push("/admin");
-        }, 1500);
-      }
+      const formData = new FormData();
+      formData.append("userId", session.user.id);
+      
+      await makeUserAdmin(formData);
+      
+      setMessage("Admin access granted! Redirecting...");
+      setTimeout(() => {
+        router.push("/admin");
+      }, 1500);
     } catch (error) {
-      console.error("Error:", error);
       setMessage("An error occurred. Please try again.");
     }
 

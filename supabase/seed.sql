@@ -1,1 +1,0 @@
--- Seed data will be added manually through the application 

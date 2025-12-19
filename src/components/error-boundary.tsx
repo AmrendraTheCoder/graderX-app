@@ -29,23 +29,25 @@ export class AuthErrorBoundary extends React.Component<
 
   clearAuthData = () => {
     try {
-      // Clear localStorage
+      // Clear localStorage - NextAuth session data
       const authKeys = [
-        "supabase.auth.token",
-        "supabase-auth-token",
-        "sb-access-token",
-        "sb-refresh-token",
+        "next-auth.session-token",
+        "next-auth.csrf-token",
+        "next-auth.callback-url",
       ];
       authKeys.forEach((key) => {
         localStorage.removeItem(key);
         sessionStorage.removeItem(key);
       });
 
-      // Clear auth cookies
+      // Clear auth cookies - NextAuth cookies
       const authCookies = [
-        "supabase-auth-token",
-        "sb-access-token",
-        "sb-refresh-token",
+        "next-auth.session-token",
+        "__Secure-next-auth.session-token",
+        "next-auth.csrf-token",
+        "__Secure-next-auth.csrf-token",
+        "next-auth.callback-url",
+        "__Secure-next-auth.callback-url",
       ];
       authCookies.forEach((cookieName) => {
         document.cookie = `${cookieName}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;

@@ -1,7 +1,10 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import { Calculator } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import connectToDatabase from "@/lib/mongodb";
+import { Subject, UserGrade } from "@/models";
 import {
   Card,
   CardContent,
@@ -12,35 +15,43 @@ import {
 import { CGPACalculatorClient } from "@/components/cgpa-calculator-client";
 
 export default async function CGPACalculator() {
-  const supabase = await createClient();
+  const session = await getServerSession(authOptions);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user) {
     return redirect("/sign-in");
   }
 
-  // Get existing grades for CGPA calculation
-  const { data: existingGrades } = await supabase
-    .from("user_grades")
-    .select(
-      `
-      *,
-      subjects:subject_id (
-        name,
-        code,
-        credits
-      )
-    `
-    )
-    .eq("user_id", user.id);
+  await connectToDatabase();
 
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("*")
-    .order("semester", { ascending: true });
+  // Get user's existing grades with subject details
+  const userGrades = await UserGrade.find({ userId: session.user.id }).lean();
+
+  // Populate subject details for each grade
+  const gradesWithSubjects = await Promise.all(
+    userGrades.map(async (grade: any) => {
+      const subject = await Subject.findById(grade.subjectId).lean();
+      return {
+        id: grade._id.toString(),
+        grade: grade.grade,
+        grade_points: grade.gradePoints,
+        semester: grade.semester,
+        academic_year: grade.academicYear,
+        subjects: subject ? {
+          name: subject.name,
+          code: subject.code,
+          credits: subject.credits,
+        } : null,
+      };
+    })
+  );
+
+  // Filter out grades without valid subjects to match ExistingGrade type
+  const existingGrades = gradesWithSubjects.filter(
+    (grade): grade is typeof grade & { subjects: NonNullable<typeof grade.subjects> } =>
+      grade.subjects !== null
+  );
+
+  const subjects = await Subject.find({}).sort({ semester: 1 }).lean();
 
   return (
     <>

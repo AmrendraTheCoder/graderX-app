@@ -731,7 +731,7 @@ export function PublicGradeCalculator({
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 sm:p-6">
             <div className="text-center mb-4">
               <h3 className="text-xl font-bold text-gray-900 mb-2">
-                📊 Your Results
+                Your Results
               </h3>
               <p className="text-gray-600 text-sm">
                 Calculated for {selectedBranch} • Semester {selectedSemester} •{" "}

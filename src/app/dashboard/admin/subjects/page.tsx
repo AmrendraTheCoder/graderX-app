@@ -1,19 +1,14 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import {
   Plus,
-  Edit,
-  Trash2,
   BookOpen,
   Save,
   Lock,
   Sparkles,
   GraduationCap,
-  TrendingUp,
-  Users,
-  Database,
 } from "lucide-react";
-import { redirect } from "next/navigation";
-import { createClient } from "../../../../../supabase/server";
+import connectToDatabase from "@/lib/mongodb";
+import { Subject } from "@/models";
 import {
   Card,
   CardContent,
@@ -25,20 +20,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  addSubjectAction,
-  editSubjectAction,
-  deleteSubjectAction,
   initializeDefaultSubjects,
 } from "../../../actions";
 import { SubmitButton } from "@/components/submit-button";
-import { InfoMessage } from "@/components/info-message";
 import {
   Table,
   TableBody,
@@ -47,24 +31,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { EditSubjectForm } from "@/components/edit-subject-form";
 import { DeleteSubjectForm } from "@/components/delete-subject-form";
 import { AddSubjectForm } from "@/components/add-subject-form";
@@ -81,28 +47,15 @@ export default async function SubjectsManagePage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  console.log("🔍 AdminSubjectsPage loading...");
-  console.log("- searchParams:", searchParams);
-
   const params = await searchParams;
 
   // Check for admin passcode from environment variable
-  const adminPasscode = process.env.ADMIN_PASSCODE || "admin123"; // Fallback for deployment
+  const adminPasscode = process.env.ADMIN_PASSCODE || "admin123";
   const providedPasscode = params.passcode;
 
-  console.log("🔐 Checking admin passcode...");
-  console.log("- providedPasscode:", providedPasscode);
-  console.log("- adminPasscode configured:", !!adminPasscode);
-  console.log("- adminPasscode value:", adminPasscode);
-  console.log("- providedPasscode length:", providedPasscode?.length);
-  console.log("- adminPasscode length:", adminPasscode?.length);
-  console.log("- comparison result:", providedPasscode === adminPasscode);
-
   if (!adminPasscode) {
-    console.log("❌ Admin passcode not configured in environment");
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-100 to-red-200 flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Animated Background */}
         <div className="absolute inset-0">
           <div className="absolute top-20 left-20 w-72 h-72 bg-red-300/20 rounded-full blur-xl animate-pulse"></div>
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-red-400/15 rounded-full blur-xl animate-pulse delay-1000"></div>
@@ -129,10 +82,8 @@ export default async function SubjectsManagePage({
   }
 
   if (providedPasscode !== adminPasscode) {
-    console.log("❌ Invalid or missing passcode - showing access form");
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-100 to-purple-200 flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Animated Background */}
         <div className="absolute inset-0">
           <div className="absolute top-20 left-20 w-72 h-72 bg-blue-300/20 rounded-full blur-xl animate-pulse"></div>
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-purple-400/15 rounded-full blur-xl animate-pulse delay-1000"></div>
@@ -202,37 +153,33 @@ export default async function SubjectsManagePage({
     );
   }
 
-  console.log("✅ Valid passcode provided - granting admin access");
+  await connectToDatabase();
 
-  const supabase = await createClient();
+  // Get all subjects from MongoDB
+  const subjects = await Subject.find({})
+    .sort({ semester: 1, name: 1 })
+    .lean();
 
-  // Get all subjects directly without user authentication
-  console.log("🔍 Fetching subjects from database...");
-  const { data: subjects, error } = await supabase
-    .from("subjects")
-    .select("*")
-    .order("semester", { ascending: true })
-    .order("name", { ascending: true });
-
-  console.log("📊 Subjects fetch result:");
-  console.log("- subjects:", subjects);
-  console.log("- error:", error);
-
-  if (error) {
-    console.log("❌ Error fetching subjects:", error);
-  }
+  // Convert MongoDB documents to plain objects with string IDs
+  const plainSubjects = subjects.map((subject: any) => ({
+    id: subject._id.toString(),
+    name: subject.name,
+    code: subject.code,
+    credits: subject.credits,
+    semester: subject.semester,
+    branch: subject.branch || "Common",
+    createdAt: subject.createdAt,
+  }));
 
   // Group subjects by semester
   const subjectsBySemester =
-    subjects?.reduce((acc: any, subject: any) => {
+    plainSubjects?.reduce((acc: any, subject: any) => {
       if (!acc[subject.semester]) {
         acc[subject.semester] = [];
       }
       acc[subject.semester].push(subject);
       return acc;
     }, {}) || {};
-
-  console.log("✅ AdminSubjectsPage loaded successfully");
 
   return (
     <>
@@ -255,7 +202,7 @@ export default async function SubjectsManagePage({
             <div className="grid grid-cols-3 gap-4 mt-8 max-w-md mx-auto">
               <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
                 <div className="text-2xl font-bold text-gray-900">
-                  {subjects?.length || 0}
+                  {plainSubjects?.length || 0}
                 </div>
                 <div className="text-sm text-gray-500">Subjects</div>
               </div>
@@ -353,12 +300,12 @@ export default async function SubjectsManagePage({
                     Current Subjects
                   </CardTitle>
                   <CardDescription className="text-gray-600">
-                    {subjects?.length || 0} subjects across{" "}
+                    {plainSubjects?.length || 0} subjects across{" "}
                     {Object.keys(subjectsBySemester).length} semesters
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {!subjects || subjects.length === 0 ? (
+                  {!plainSubjects || plainSubjects.length === 0 ? (
                     <div className="text-center py-12">
                       <div className="bg-gray-100 p-6 rounded-xl inline-block mb-4">
                         <BookOpen className="w-12 h-12 text-gray-400 mx-auto" />
@@ -518,26 +465,6 @@ export default async function SubjectsManagePage({
             </div>
           </div>
         </div>
-
-        {/* Clean URL script */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if (typeof window !== 'undefined') {
-                setTimeout(() => {
-                  const url = new URL(window.location);
-                  const hasParams = url.searchParams.has('error') || url.searchParams.has('message');
-                  if (hasParams) {
-                    url.searchParams.delete('error');
-                    url.searchParams.delete('message');
-                    url.searchParams.delete('_rsc');
-                    window.history.replaceState({}, '', url.pathname);
-                  }
-                }, 3000);
-              }
-            `,
-          }}
-        />
       </main>
     </>
   );

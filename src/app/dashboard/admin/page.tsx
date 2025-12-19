@@ -1,7 +1,10 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import { Shield, Users, BookOpen, Plus, BarChart3 } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import connectToDatabase from "@/lib/mongodb";
+import { User, Subject, UserGrade, CGPACalculation } from "@/models";
 import {
   Card,
   CardContent,
@@ -43,14 +46,10 @@ interface AdminPageProps {
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
-  const supabase = await createClient();
+  const session = await getServerSession(authOptions);
   const params = await searchParams;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user) {
     return redirect("/sign-in");
   }
 
@@ -106,22 +105,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     );
   }
 
-  // Get statistics
-  const { data: users } = await supabase
-    .from("users")
-    .select("*")
-    .order("created_at", { ascending: false });
+  // Connect to MongoDB and get statistics
+  await connectToDatabase();
 
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("*")
-    .order("semester", { ascending: true });
-
-  const { data: grades } = await supabase.from("user_grades").select("*");
-
-  const { data: cgpaData } = await supabase
-    .from("cgpa_calculations")
-    .select("*");
+  const users = await User.find({}).sort({ createdAt: -1 }).lean();
+  const subjects = await Subject.find({}).sort({ semester: 1 }).lean();
+  const grades = await UserGrade.find({}).lean();
+  const cgpaData = await CGPACalculation.find({}).lean();
 
   const totalUsers = users?.length || 0;
   const totalSubjects = subjects?.length || 0;
@@ -319,12 +309,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <div className="space-y-4 max-h-96 overflow-y-auto">
                     {users.slice(0, 10).map((user: any) => (
                       <div
-                        key={user.id}
+                        key={user._id.toString()}
                         className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
                       >
                         <div>
                           <p className="font-medium">
-                            {user.name || user.email?.split("@")[0]}
+                            {user.name || user.fullName || user.email?.split("@")[0]}
                           </p>
                           <p className="text-sm text-muted-foreground">
                             {user.email}
@@ -335,7 +325,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             {user.role || "student"}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(user.created_at).toLocaleDateString()}
+                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                           </p>
                         </div>
                       </div>
@@ -373,7 +363,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   </TableHeader>
                   <TableBody>
                     {subjects.map((subject: any) => (
-                      <TableRow key={subject.id}>
+                      <TableRow key={subject._id.toString()}>
                         <TableCell className="font-medium">
                           {subject.name}
                         </TableCell>
@@ -385,7 +375,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           {subject.semester}
                         </TableCell>
                         <TableCell className="text-center">
-                          {new Date(subject.created_at).toLocaleDateString()}
+                          {subject.createdAt ? new Date(subject.createdAt).toLocaleDateString() : 'N/A'}
                         </TableCell>
                       </TableRow>
                     ))}

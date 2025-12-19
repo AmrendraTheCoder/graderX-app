@@ -1,7 +1,10 @@
 import DashboardNavbar from "@/components/dashboard-navbar";
 import { Plus, BookOpen } from "lucide-react";
 import { redirect } from "next/navigation";
-import { createClient } from "../../../../supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import connectToDatabase from "@/lib/mongodb";
+import { Subject, UserGrade } from "@/models";
 import {
   Card,
   CardContent,
@@ -9,9 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { addGradeAction } from "../../actions";
 import { SubmitButton } from "@/components/submit-button";
 import { InfoMessage } from "@/components/info-message";
@@ -33,38 +34,38 @@ export default async function GradesPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const supabase = await createClient();
+  const session = await getServerSession(authOptions);
   const params = await searchParams;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user) {
     return redirect("/sign-in");
   }
 
-  // Get available subjects
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("*")
-    .order("semester", { ascending: true });
+  await connectToDatabase();
 
-  // Get user's existing grades
-  const { data: userGrades } = await supabase
-    .from("user_grades")
-    .select(
-      `
-      *,
-      subjects:subject_id (
-        name,
-        code,
-        credits
-      )
-    `
-    )
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  // Get available subjects
+  const subjects = await Subject.find({}).sort({ semester: 1 }).lean();
+
+  // Get user's existing grades with subject details
+  const userGrades = await UserGrade.find({ userId: session.user.id })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  // Populate subject details for each grade
+  const populatedGrades = await Promise.all(
+    userGrades.map(async (grade: any) => {
+      const subject = await Subject.findById(grade.subjectId).lean();
+      return {
+        ...grade,
+        _id: grade._id.toString(),
+        subjects: subject ? {
+          name: subject.name,
+          code: subject.code,
+          credits: subject.credits,
+        } : null,
+      };
+    })
+  );
 
   return (
     <>
@@ -111,8 +112,8 @@ export default async function GradesPage({
                         <SelectValue placeholder="Select a subject" />
                       </SelectTrigger>
                       <SelectContent>
-                        {subjects?.map((subject) => (
-                          <SelectItem key={subject.id} value={subject.id}>
+                        {subjects?.map((subject: any) => (
+                          <SelectItem key={subject._id.toString()} value={subject._id.toString()}>
                             {subject.name} ({subject.code}) - {subject.credits}{" "}
                             credits
                           </SelectItem>
@@ -193,7 +194,7 @@ export default async function GradesPage({
                 <CardDescription>Recently added grades</CardDescription>
               </CardHeader>
               <CardContent>
-                {!userGrades || userGrades.length === 0 ? (
+                {!populatedGrades || populatedGrades.length === 0 ? (
                   <div className="text-center py-8">
                     <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">No grades added yet</p>
@@ -203,16 +204,16 @@ export default async function GradesPage({
                   </div>
                 ) : (
                   <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {userGrades.map((grade: any) => (
+                    {populatedGrades.map((grade: any) => (
                       <div
-                        key={grade.id}
+                        key={grade._id}
                         className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
                       >
                         <div>
                           <p className="font-medium">{grade.subjects?.name}</p>
                           <p className="text-sm text-muted-foreground">
                             {grade.subjects?.code} • Semester {grade.semester} •{" "}
-                            {grade.academic_year}
+                            {grade.academicYear}
                           </p>
                         </div>
                         <div className="text-right">
@@ -238,7 +239,7 @@ export default async function GradesPage({
                             {grade.grade}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {grade.grade_points} points
+                            {grade.gradePoints} points
                           </p>
                         </div>
                       </div>
@@ -250,7 +251,7 @@ export default async function GradesPage({
           </div>
 
           {/* Quick Stats */}
-          {userGrades && userGrades.length > 0 && (
+          {populatedGrades && populatedGrades.length > 0 && (
             <Card className="mt-8">
               <CardHeader>
                 <CardTitle>Grade Statistics</CardTitle>
@@ -263,7 +264,7 @@ export default async function GradesPage({
                       A Grades
                     </p>
                     <p className="text-2xl font-bold text-green-600">
-                      {userGrades.filter((g: any) => g.grade === "A").length}
+                      {populatedGrades.filter((g: any) => g.grade === "A").length}
                     </p>
                   </div>
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
@@ -271,7 +272,7 @@ export default async function GradesPage({
                       AB Grades
                     </p>
                     <p className="text-2xl font-bold text-blue-600">
-                      {userGrades.filter((g: any) => g.grade === "AB").length}
+                      {populatedGrades.filter((g: any) => g.grade === "AB").length}
                     </p>
                   </div>
                   <div className="text-center p-4 bg-purple-50 rounded-lg">
@@ -279,7 +280,7 @@ export default async function GradesPage({
                       Total Subjects
                     </p>
                     <p className="text-2xl font-bold text-purple-600">
-                      {userGrades.length}
+                      {populatedGrades.length}
                     </p>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
@@ -288,10 +289,10 @@ export default async function GradesPage({
                     </p>
                     <p className="text-2xl font-bold text-gray-600">
                       {(
-                        userGrades.reduce(
-                          (sum: number, g: any) => sum + g.grade_points,
+                        populatedGrades.reduce(
+                          (sum: number, g: any) => sum + (g.gradePoints || 0),
                           0
-                        ) / userGrades.length
+                        ) / populatedGrades.length
                       ).toFixed(1)}
                     </p>
                   </div>
