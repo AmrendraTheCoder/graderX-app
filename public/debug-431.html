@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Debug HTTP 431 Error - GraderX</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+      .button {
+        background: #3b82f6;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        margin: 5px;
+      }
+      .button:hover {
+        background: #2563eb;
+      }
+      .danger {
+        background: #dc2626;
+      }
+      .danger:hover {
+        background: #b91c1c;
+      }
+      .success {
+        background: #059669;
+      }
+      .success:hover {
+        background: #047857;
+      }
+      .info {
+        background: #0891b2;
+        color: white;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 10px 0;
+      }
+      .warning {
+        background: #f59e0b;
+        color: white;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 10px 0;
+      }
+      .error {
+        background: #dc2626;
+        color: white;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 10px 0;
+      }
+      .code {
+        background: #f3f4f6;
+        padding: 10px;
+        border-radius: 4px;
+        font-family: monospace;
+        white-space: pre-wrap;
+        margin: 10px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔧 HTTP 431 Error Diagnostic Tool</h1>
+      <p>
+        This tool will help diagnose and fix the "Request Header Fields Too
+        Large" error.
+      </p>
+
+      <div class="info">
+        <strong>Status:</strong> <span id="status">Checking...</span>
+      </div>
+
+      <button class="button" onclick="runDiagnostic()">
+        🔍 Run Diagnostic
+      </button>
+      <button class="button danger" onclick="clearAllData()">
+        🗑️ Clear All Browser Data
+      </button>
+      <button class="button" onclick="clearAuthOnly()">
+        🔑 Clear Auth Data Only
+      </button>
+      <button class="button success" onclick="testConnection()">
+        🌐 Test Connection
+      </button>
+    </div>
+
+    <div class="container">
+      <h2>📊 Diagnostic Results</h2>
+      <div id="results">Click "Run Diagnostic" to see results...</div>
+    </div>
+
+    <div class="container">
+      <h2>🚀 Quick Actions</h2>
+      <div>
+        <button class="button" onclick="window.location.href='/'">
+          🏠 Try Home Page
+        </button>
+        <button class="button" onclick="window.location.href='/sign-in'">
+          🔐 Try Sign In
+        </button>
+        <button
+          class="button"
+          onclick="window.location.href='/clear-storage.html'"
+        >
+          🧹 Full Clear Tool
+        </button>
+      </div>
+    </div>
+
+    <script>
+      function updateStatus(message, type = "info") {
+        const status = document.getElementById("status");
+        status.innerHTML = message;
+        status.className = type;
+      }
+
+      function addResult(title, content, type = "info") {
+        const results = document.getElementById("results");
+        const div = document.createElement("div");
+        div.className = type;
+        div.innerHTML = `<strong>${title}:</strong> ${content}`;
+        results.appendChild(div);
+      }
+
+      function clearResults() {
+        document.getElementById("results").innerHTML = "";
+      }
+
+      function runDiagnostic() {
+        clearResults();
+        updateStatus("Running diagnostic...", "info");
+
+        // Check localStorage size
+        let localStorageSize = 0;
+        for (let key in localStorage) {
+          if (localStorage.hasOwnProperty(key)) {
+            localStorageSize += localStorage[key].length + key.length;
+          }
+        }
+
+        // Check sessionStorage size
+        let sessionStorageSize = 0;
+        for (let key in sessionStorage) {
+          if (sessionStorage.hasOwnProperty(key)) {
+            sessionStorageSize += sessionStorage[key].length + key.length;
+          }
+        }
+
+        // Check cookies size
+        const cookiesSize = document.cookie.length;
+
+        // Check auth keys
+        const authKeys = [
+          "supabase.auth.token",
+          "supabase-auth-token",
+          "sb-access-token",
+          "sb-refresh-token",
+        ];
+        const foundAuthKeys = authKeys.filter(
+          (key) =>
+            localStorage.getItem(key) ||
+            sessionStorage.getItem(key) ||
+            document.cookie.includes(key)
+        );
+
+        // Display results
+        addResult(
+          "LocalStorage Size",
+          `${localStorageSize} characters`,
+          localStorageSize > 5000000 ? "warning" : "info"
+        );
+        addResult(
+          "SessionStorage Size",
+          `${sessionStorageSize} characters`,
+          sessionStorageSize > 5000000 ? "warning" : "info"
+        );
+        addResult(
+          "Cookies Size",
+          `${cookiesSize} characters`,
+          cookiesSize > 4000 ? "error" : "info"
+        );
+        addResult(
+          "Auth Keys Found",
+          foundAuthKeys.length > 0 ? foundAuthKeys.join(", ") : "None",
+          foundAuthKeys.length > 0 ? "warning" : "success"
+        );
+
+        // Check for large values
+        let largeItems = [];
+        for (let key in localStorage) {
+          if (
+            localStorage.hasOwnProperty(key) &&
+            localStorage[key].length > 1000
+          ) {
+            largeItems.push(
+              `localStorage.${key}: ${localStorage[key].length} chars`
+            );
+          }
+        }
+
+        if (largeItems.length > 0) {
+          addResult("Large Storage Items", largeItems.join("<br>"), "warning");
+        }
+
+        // Recommendations
+        if (cookiesSize > 4000) {
+          addResult(
+            "⚠️ Problem Found",
+            "Cookies are too large! This is likely causing the 431 error.",
+            "error"
+          );
+          addResult(
+            "Recommendation",
+            'Click "Clear All Browser Data" to fix this issue.',
+            "warning"
+          );
+        } else if (localStorageSize > 5000000 || sessionStorageSize > 5000000) {
+          addResult(
+            "⚠️ Problem Found",
+            "Browser storage is very large and may be causing issues.",
+            "warning"
+          );
+          addResult(
+            "Recommendation",
+            "Consider clearing browser storage.",
+            "info"
+          );
+        } else {
+          addResult(
+            "✅ Storage Looks OK",
+            "Storage sizes appear normal. The 431 error may be server-side.",
+            "success"
+          );
+        }
+
+        updateStatus("Diagnostic complete", "success");
+      }
+
+      function clearAllData() {
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+
+          // Clear all cookies
+          document.cookie.split(";").forEach(function (c) {
+            document.cookie = c
+              .replace(/^ +/, "")
+              .replace(
+                /=.*/,
+                "=;expires=" + new Date().toUTCString() + ";path=/"
+              );
+          });
+
+          updateStatus("All data cleared! Redirecting...", "success");
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 2000);
+        } catch (error) {
+          updateStatus("Error clearing data: " + error.message, "error");
+        }
+      }
+
+      function clearAuthOnly() {
+        try {
+          const authKeys = [
+            "supabase.auth.token",
+            "supabase-auth-token",
+            "sb-access-token",
+            "sb-refresh-token",
+          ];
+          authKeys.forEach((key) => {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+            document.cookie =
+              key + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+          });
+
+          updateStatus(
+            "Auth data cleared! Redirecting to sign in...",
+            "success"
+          );
+          setTimeout(() => {
+            window.location.href = "/sign-in";
+          }, 2000);
+        } catch (error) {
+          updateStatus("Error clearing auth data: " + error.message, "error");
+        }
+      }
+
+      function testConnection() {
+        updateStatus("Testing connection...", "info");
+
+        fetch("/")
+          .then((response) => {
+            if (response.ok) {
+              updateStatus("✅ Connection successful!", "success");
+              addResult(
+                "Connection Test",
+                "Server is responding normally",
+                "success"
+              );
+            } else {
+              updateStatus(
+                "⚠️ Server responded with error: " + response.status,
+                "warning"
+              );
+            }
+          })
+          .catch((error) => {
+            updateStatus("❌ Connection failed: " + error.message, "error");
+            addResult(
+              "Connection Test",
+              "Failed to connect to server",
+              "error"
+            );
+          });
+      }
+
+      // Auto-run diagnostic on page load
+      window.onload = function () {
+        runDiagnostic();
+      };
+    </script>
+  </body>
+</html>

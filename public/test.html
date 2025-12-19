@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Test - No Middleware</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+        background: #f0f9ff;
+      }
+      .card {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .button {
+        background: #3b82f6;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        margin: 10px 5px;
+      }
+      .success {
+        background: #059669;
+      }
+      .danger {
+        background: #dc2626;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>✅ Success! This page loaded</h1>
+      <p>
+        If you can see this page, the server is working fine. The 431 error is
+        caused by browser cookies/storage.
+      </p>
+
+      <h2>🔧 Clear Browser Data Now:</h2>
+
+      <button class="button danger" onclick="clearAllBrowserData()">
+        🗑️ Clear ALL Browser Data
+      </button>
+
+      <button class="button" onclick="clearAuthOnly()">
+        🔑 Clear Auth Data Only
+      </button>
+
+      <button class="button success" onclick="testAfterClear()">
+        🧪 Test Main App
+      </button>
+
+      <div
+        id="status"
+        style="
+          margin-top: 20px;
+          padding: 15px;
+          border-radius: 6px;
+          display: none;
+        "
+      ></div>
+
+      <h3>📋 Manual Steps (if buttons don't work):</h3>
+      <ol>
+        <li>
+          <strong>Chrome/Edge:</strong> F12 → Application → Storage → Clear
+          storage
+        </li>
+        <li>
+          <strong>Firefox:</strong> F12 → Storage → Right-click domain → Delete
+          All
+        </li>
+        <li>
+          <strong>Safari:</strong> Preferences → Privacy → Manage Website Data →
+          Remove
+        </li>
+      </ol>
+
+      <h3>🔍 What happened?</h3>
+      <p>
+        Your browser accumulated large authentication cookies from Supabase.
+        We've fixed the code to prevent this in the future, but your current
+        session needs to be cleared.
+      </p>
+    </div>
+
+    <script>
+      function showStatus(message, type = "info") {
+        const status = document.getElementById("status");
+        status.style.display = "block";
+        status.innerHTML = message;
+        status.style.background =
+          type === "success"
+            ? "#059669"
+            : type === "error"
+              ? "#dc2626"
+              : "#0891b2";
+        status.style.color = "white";
+      }
+
+      function clearAllBrowserData() {
+        try {
+          // Clear localStorage
+          localStorage.clear();
+
+          // Clear sessionStorage
+          sessionStorage.clear();
+
+          // Clear cookies
+          document.cookie.split(";").forEach(function (c) {
+            document.cookie = c
+              .replace(/^ +/, "")
+              .replace(
+                /=.*/,
+                "=;expires=" + new Date().toUTCString() + ";path=/"
+              );
+          });
+
+          showStatus(
+            "✅ All browser data cleared! Redirecting to main app...",
+            "success"
+          );
+
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 3000);
+        } catch (error) {
+          showStatus(
+            "❌ Error: " +
+              error.message +
+              ". Please clear manually using browser settings.",
+            "error"
+          );
+        }
+      }
+
+      function clearAuthOnly() {
+        try {
+          const authKeys = [
+            "supabase.auth.token",
+            "supabase-auth-token",
+            "sb-access-token",
+            "sb-refresh-token",
+            "sb-localhost-auth-token",
+          ];
+
+          authKeys.forEach((key) => {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+            // Clear cookies
+            document.cookie =
+              key + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+            document.cookie =
+              key +
+              "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=localhost";
+          });
+
+          showStatus(
+            "✅ Auth data cleared! You can now try the main app.",
+            "success"
+          );
+        } catch (error) {
+          showStatus("❌ Error clearing auth data: " + error.message, "error");
+        }
+      }
+
+      function testAfterClear() {
+        showStatus("🧪 Testing main application...", "info");
+
+        fetch("/")
+          .then((response) => {
+            if (response.ok) {
+              showStatus(
+                "✅ Success! Main app is accessible. Redirecting...",
+                "success"
+              );
+              setTimeout(() => {
+                window.location.href = "/";
+              }, 2000);
+            } else {
+              showStatus(
+                "⚠️ Main app returned error: " + response.status,
+                "error"
+              );
+            }
+          })
+          .catch((error) => {
+            showStatus(
+              "❌ Still having issues: " +
+                error.message +
+                ". Try clearing data again.",
+              "error"
+            );
+          });
+      }
+
+      // Auto-check browser data on load
+      window.onload = function () {
+        const cookieSize = document.cookie.length;
+        const localStorageSize = JSON.stringify(localStorage).length;
+
+        if (cookieSize > 4000) {
+          showStatus(
+            `⚠️ Large cookies detected (${cookieSize} chars). Click "Clear ALL Browser Data" to fix.`,
+            "error"
+          );
+        } else if (localStorageSize > 100000) {
+          showStatus(
+            `⚠️ Large localStorage detected (${localStorageSize} chars). Consider clearing.`,
+            "info"
+          );
+        } else {
+          showStatus(
+            "ℹ️ Browser storage looks normal. You can try the main app now.",
+            "info"
+          );
+        }
+      };
+    </script>
+  </body>
+</html>
